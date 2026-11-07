@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stencil Tiler</title>
+  <meta name="description" content="Turn any SVG into a margin-less, tiled PDF outline. Print it, tape it to the wall, paint it.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Stencil Tiler</h1>
+    <p>Upload an SVG, choose a real-world size, print it across pages, tape it up and paint.</p>
+  </header>
+
+  <main class="layout">
+    <div class="controls">
+
+      <section class="card" aria-labelledby="h-upload">
+        <h2 id="h-upload"><span class="n">1</span>SVG file</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".svg,image/svg+xml">
+          <strong>Choose an SVG</strong>
+          <span>or drop it here</span>
+        </label>
+        <button type="button" class="link" id="sample">Try a sample</button>
+        <p class="fileinfo" id="fileinfo" hidden></p>
+        <p class="error" id="error" role="alert" hidden></p>
+        <ul class="notes" id="warnings" hidden></ul>
+      </section>
+
+      <fieldset class="steps" id="steps" disabled>
+        <section class="card" aria-labelledby="h-size">
+          <h2 id="h-size"><span class="n">2</span>Real-world size</h2>
+          <div class="row">
+            <label class="field">
+              <span>Unit</span>
+              <select id="unit">
+                <option value="ft" selected>ft</option>
+                <option value="in">in</option>
+                <option value="cm">cm</option>
+                <option value="m">m</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Width</span>
+              <input type="number" id="width" min="0" step="any" inputmode="decimal">
+            </label>
+            <label class="field">
+              <span>Height</span>
+              <input type="number" id="height" min="0" step="any" inputmode="decimal">
+            </label>
+          </div>
+          <p class="hint">Enter either one; the other follows the artwork's proportions.</p>
+        </section>
+
+        <section class="card" aria-labelledby="h-paper">
+          <h2 id="h-paper"><span class="n">3</span>Printer paper</h2>
+          <div class="row">
+            <label class="field grow">
+              <span>Page size</span>
+              <select id="paper"></select>
+            </label>
+            <div class="field wide">
+              <span>Orientation</span>
+              <div class="seg" role="radiogroup" aria-label="Orientation">
+                <label><input type="radio" name="orient" value="portrait" checked><span>Portrait</span></label>
+                <label><input type="radio" name="orient" value="landscape"><span>Landscape</span></label>
+              </div>
+            </div>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="overview">
+            <span>Add an assembly map as the first page</span>
+          </label>
+          <p class="hint" id="orienthint"></p>
+        </section>
+      </fieldset>
+    </div>
+
+    <div class="result">
+      <section class="card" aria-labelledby="h-preview">
+        <h2 id="h-preview"><span class="n">4</span>Preview &amp; download</h2>
+        <p class="summary" id="summary" aria-live="polite">Load an SVG to see the page layout.</p>
+        <p class="warn" id="pagewarn" hidden></p>
+        <div class="preview" id="preview" aria-label="Page layout preview"></div>
+        <button type="button" class="primary" id="download" disabled>Download PDF</button>
+        <p class="hint">Print at 100% / "Actual size". Do not use "Fit to page". Crosses sit in the overlap; line them up on neighbouring pages, then tape.</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

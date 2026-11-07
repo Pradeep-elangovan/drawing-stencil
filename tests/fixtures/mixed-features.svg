@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="150" viewBox="0 0 300 150">
+  <defs>
+    <path id="leaf" d="M0 0 C 10 -20, 30 -20, 40 0 C 30 20, 10 20, 0 0 Z"/>
+  </defs>
+  <style>
+    .keep { fill: none; stroke: #000; stroke-width: 3; }
+    .ghost { fill: none; stroke: none; }
+  </style>
+  <!-- rotated + translated group with relative commands -->
+  <g transform="translate(60 75) rotate(30)">
+    <path d="m-40 -20 h80 v40 h-80 z"/>
+  </g>
+  <!-- compact arc flags, hole via evenodd -->
+  <path fill-rule="evenodd" d="M150 30a40 40 0 1 0 .1 0zM150 50a20 20 0 1 1-.1 0z"/>
+  <!-- stroke-only open curve via stylesheet class -->
+  <path class="keep" d="M200 120 Q 230 60 260 120 T 290 120"/>
+  <!-- reused symbol -->
+  <use xlink:href="#leaf" x="200" y="20"/>
+  <!-- rounded rect -->
+  <rect x="10" y="110" width="60" height="30" rx="8"/>
+  <!-- must be skipped: invisible by class, display:none, no paint -->
+  <circle class="ghost" cx="5" cy="5" r="500"/>
+  <rect display="none" x="-999" y="-999" width="5000" height="5000"/>
+  <path d="M0 0 L 900 900" fill="none"/>
+  <text x="10" y="20">words</text>
+</svg>
