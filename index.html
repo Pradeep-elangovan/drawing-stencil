@@ -108,16 +108,51 @@
           <p class="hint">Cut the shapes in numbered order. Small inner details come first, so the paper is still whole and acts as a stencil while you paint them. Grey hatching marks paper to leave uncut.</p>
           <p class="info" id="orderinfo" aria-live="polite"></p>
         </section>
+
+        <section class="card" aria-labelledby="h-machine">
+          <h2 id="h-machine"><span class="n">5</span>Cutting machine</h2>
+          <label class="check first">
+            <input type="checkbox" id="machineOn">
+            <span>I will cut with a cutting machine</span>
+          </label>
+          <div id="machineOpts" hidden>
+            <div class="row sub">
+              <label class="field grow">
+                <span>Machine</span>
+                <select id="machine"></select>
+              </label>
+              <label class="field">
+                <span>Cut style</span>
+                <select id="cutstyle">
+                  <option value="perf" selected>Spotted (perforated)</option>
+                  <option value="full">Full cut</option>
+                </select>
+              </label>
+              <label class="field" id="bridgeField">
+                <span>Bridge size</span>
+                <select id="bridge">
+                  <option value="small">Small (1 mm)</option>
+                  <option value="medium" selected>Medium (1.5 mm)</option>
+                  <option value="large">Large (2.5 mm)</option>
+                </select>
+              </label>
+            </div>
+            <p class="hint" id="machinehint"></p>
+            <p class="info" id="machineinfo" aria-live="polite"></p>
+          </div>
+        </section>
       </fieldset>
     </div>
 
     <div class="result">
       <section class="card" aria-labelledby="h-preview">
-        <h2 id="h-preview"><span class="n">5</span>Preview &amp; download</h2>
+        <h2 id="h-preview"><span class="n">6</span>Preview &amp; download</h2>
         <p class="summary" id="summary" aria-live="polite">Load an SVG to see the page layout.</p>
         <p class="warn" id="pagewarn" hidden></p>
         <div class="preview" id="preview" aria-label="Page layout preview"></div>
         <button type="button" class="primary" id="download" disabled>Download PDF</button>
+        <button type="button" class="secondary" id="kit" hidden disabled>Download cutting kit (ZIP)</button>
+        <p class="hint" id="kithint" hidden>The kit has a cut file for every page, an instruction sheet for your machine, and a copy of the PDF.</p>
         <p class="hint">Print at 100% / "Actual size". Do not use "Fit to page".</p>
       </section>
     </div>

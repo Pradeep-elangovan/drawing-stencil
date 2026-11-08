@@ -51,6 +51,25 @@ It also deploys as-is to GitHub Pages, Netlify, etc.
     inside another are treated as neighbours, not as children.
   - Open lines (not closed shapes) are not numbered. SVGs with more than 2000 closed shapes
     are not numbered.
+- **Cutting machine** (checkbox, off by default): for people who cut with a machine instead of
+  by hand. Tick it, pick the machine, and download a **cutting kit (ZIP)** next to the PDF:
+  - one **cut file per page** (SVG; also DXF for Silhouette and "other"), each exactly the size
+    of the sheet, plus an alignment test file;
+  - an **instruction PDF** for the chosen machine;
+  - a copy of the print PDF. (The printable PDF stays a single combined file; the ZIP only exists
+    because a machine loads one design per mat.)
+  - *Spotted cuts:* every outline is cut as dashes about 5 mm long with 1, 1.5 or 2.5 mm uncut
+    bridges, so shapes stay attached until you tear them out along the perforation (and loose
+    islands of paper stay held). The dashes are real geometry because cutting software ignores
+    SVG dash styles. Choose *Full cut* to cut all the way round instead.
+  - *Alignment:* cut-only, by hand. Four 2 mm punches at the sheet corners make each file exactly
+    sheet-sized, so the file's top-left corner goes on the sheet's top-left corner at the mat
+    corner. Print Then Cut is not used: a full A4 or Letter sheet is larger than Cricut's Print
+    Then Cut allows, and Silhouette's registration marks come from its own software.
+  - *Machines:* Cricut Explore / Maker, Cricut Joy Xtra, Silhouette Cameo / Portrait, Brother
+    ScanNCut, and other SVG / DXF cutters. The page tells you if the paper is probably too big
+    for the usual mats (approximate, 0.25 in clearance).
+  - **Not tested on real machines.** Always run the alignment test on scrap paper first.
 - **Paper:** A5, A4 (default), A3, Letter, Legal, Tabloid, 4x6, 5x7; portrait or landscape.
 - **PDF:** vector paths embedded once and reused per page, so lines stay crisp at any size.
   An optional assembly-map page can be added first.
@@ -64,6 +83,11 @@ css/styles.css
 js/svg-outline.js SVG parsing -> outline geometry
 js/tiling.js      units, paper sizes, grid maths
 js/order.js       nesting, cut/keep roles, cut order, label points
+js/cutfiles.js    dashed cut paths, SVG/DXF per page
+js/machines.js    supported cutters, mat sizes, per-machine steps
+js/guide.js       instruction PDF
+js/kit.js         builds the cutting kit
+js/zip.js         tiny ZIP writer
 js/pdf.js         PDF generation (pdf-lib)
 js/main.js        UI wiring and preview
 vendor/           pdf-lib (MIT)
@@ -74,6 +98,7 @@ tests/            fixtures + Playwright smoke test
 
 ```sh
 node tests/order.test.mjs                                   # cut-order logic, no browser needed
+node tests/cutfiles.test.mjs                                # dashes, clipping, SVG/DXF, zip
 NODE_PATH=<dir with playwright and pdf-lib> node tests/smoke.mjs   # end to end in headless Chromium
 ```
 

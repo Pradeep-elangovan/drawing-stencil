@@ -1,5 +1,7 @@
 import { parseSvg, toPathD } from './svg-outline.js';
 import { analyzeOrder, numberSize, HATCH_MM } from './order.js';
+import { MACHINES, MACHINE_IDS, fitReport } from './machines.js';
+import { buildKit } from './kit.js';
 import {
   MM_PER, PAPERS, MAX_PAGES, WARN_PAGES, MARGIN_MM, OVERLAP_MM,
   STROKE_DEFAULT_MM, STROKE_MIN_MM, STROKE_MAX_MM, STROKE_UNITS, paperLabel, computeLayout,
@@ -14,6 +16,9 @@ const el = {
   pageWarn: $('pagewarn'), preview: $('preview'), download: $('download'),
   stroke: $('stroke'), strokeUnit: $('strokeUnit'), strokeHint: $('strokehint'), modeHint: $('modehint'),
   order: $('order'), orderInfo: $('orderinfo'),
+  machineOn: $('machineOn'), machineOpts: $('machineOpts'), machine: $('machine'), cutStyle: $('cutstyle'),
+  bridge: $('bridge'), bridgeField: $('bridgeField'), machineHint: $('machinehint'), machineInfo: $('machineinfo'),
+  kit: $('kit'), kitHint: $('kithint'),
 };
 const STROKE_HINT = el.strokeHint.textContent;
 
@@ -37,6 +42,13 @@ for (const key of Object.keys(PAPERS)) {
   o.textContent = paperLabel(key);
   if (key === 'A4') o.selected = true;
   el.paper.append(o);
+}
+
+for (const id of MACHINE_IDS) {
+  const o = document.createElement('option');
+  o.value = id;
+  o.textContent = MACHINES[id].name;
+  el.machine.append(o);
 }
 
 const orientation = () => document.querySelector('input[name="orient"]:checked').value;
@@ -132,6 +144,7 @@ el.unit.addEventListener('change', () => {
 el.paper.addEventListener('change', update);
 el.overview.addEventListener('change', update);
 el.order.addEventListener('change', update);
+for (const c of [el.machineOn, el.machine, el.cutStyle, el.bridge]) c.addEventListener('change', update);
 for (const r of document.querySelectorAll('input[name="orient"], input[name="mode"]')) r.addEventListener('change', update);
 
 // ------------------------------------------------------------------ line thickness
@@ -167,17 +180,20 @@ function update() {
     : `Every page keeps a ${MARGIN_MM / 10} cm blank margin. Where a page joins a neighbour, cut the margin off along the cut marks and butt the pages together; outer sides keep their margin.`;
 
   renderOrderInfo();
+  renderMachineInfo();
 
   const ok = hasSize() && sOk;
   state.valid = ok;
   if (!ok) {
     state.layout = null;
+    renderMachineInfo();
     el.summary.textContent = !state.parsed ? 'Load an SVG to see the page layout.'
       : !sOk ? 'Fix the line thickness to see the layout.' : 'Enter a width or height greater than zero.';
     el.pageWarn.hidden = true;
     el.orientHint.textContent = '';
     el.preview.innerHTML = '<span class="empty">The tile preview appears here.</span>';
     el.download.disabled = true;
+    el.kit.disabled = true;
     return;
   }
 
@@ -185,6 +201,7 @@ function update() {
   const opts = { mode: printMode(), strokeMm: state.strokeMm };
   const L = computeLayout(artW, artH, el.paper.value, orientation(), opts);
   state.layout = L;
+  renderMachineInfo(); // needs the layout for the paper-fit message
 
   const u = el.unit.value;
   const extra = el.overview.checked ? ' + 1 map page' : '';
@@ -204,6 +221,7 @@ function update() {
 
   renderPreview(L);
   el.download.disabled = state.busy || tooMany;
+  el.kit.disabled = state.busy || tooMany;
 }
 
 // Order guide is only drawn when the toggle is on and there is something to number.
@@ -233,6 +251,31 @@ function renderOrderInfo() {
   if (caution) {
     const span = Object.assign(document.createElement('span'), { className: 'caution', textContent: caution });
     el.orderInfo.append(span);
+  }
+}
+
+function renderMachineInfo() {
+  const on = el.machineOn.checked;
+  el.machineOpts.hidden = !on;
+  el.kit.hidden = !on;
+  el.kitHint.hidden = !on;
+  el.bridgeField.hidden = el.cutStyle.value === 'full';
+  if (!on) return;
+  const m = MACHINES[el.machine.value];
+  const perf = el.cutStyle.value === 'perf';
+  el.machineHint.textContent = (perf
+    ? 'Every outline is cut as short dashes with small uncut bridges, so shapes stay attached until you tear them out along the perforation. '
+    : 'Every outline is cut all the way round, so shapes come loose as soon as the paper is lifted. ') +
+    `Files: ${m.formats.map((x) => x.toUpperCase()).join(' + ')}, one per page, each the size of the sheet.`;
+  el.machineInfo.textContent = '';
+  if (!state.layout) return;
+  const fit = fitReport(el.machine.value, state.layout.pw, state.layout.ph);
+  if (!fit.checked) return;
+  el.machineInfo.textContent = fit.ok
+    ? `Sheet fits the ${fit.fits.join(' or ')} mat (approximate).`
+    : `This paper is probably too big for the usual mats (${fit.all.join(', ')}). Pick a smaller paper size, or check your machine's maximum cutting area.`;
+  if (!fit.ok) {
+    el.machineInfo.append(Object.assign(document.createElement('span'), { className: 'caution', textContent: 'You can still download the kit.' }));
   }
 }
 
@@ -327,6 +370,52 @@ el.download.addEventListener('click', async () => {
   } finally {
     state.busy = false;
     el.download.textContent = label;
+    update();
+  }
+});
+
+// ------------------------------------------------------------------ cutting kit
+
+function saveBlob(bytes, type, filename) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+el.kit.addEventListener('click', async () => {
+  if (!state.valid || state.busy) return;
+  state.busy = true;
+  el.download.disabled = true;
+  el.kit.disabled = true;
+  const label = el.kit.textContent;
+  el.kit.textContent = 'Preparing kit...';
+  showError('');
+  try {
+    await new Promise((r) => setTimeout(r, 30));
+    const { bytes, name } = await buildKit({
+      subpaths: state.parsed.subpaths,
+      bbox: state.parsed.bbox,
+      widthMm: state.widthMm,
+      strokeMm: state.strokeMm,
+      mode: printMode(),
+      paper: el.paper.value,
+      orientation: orientation(),
+      overview: el.overview.checked,
+      order: guideOn() ? state.order : null,
+      title: state.name,
+      machineId: el.machine.value,
+      perforated: el.cutStyle.value === 'perf',
+      bridge: el.bridge.value,
+    });
+    saveBlob(bytes, 'application/zip', name);
+  } catch (e) {
+    showError(`Could not build the cutting kit: ${e.message}`);
+  } finally {
+    state.busy = false;
+    el.kit.textContent = label;
     update();
   }
 });

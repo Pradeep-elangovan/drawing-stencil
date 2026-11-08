@@ -190,3 +190,20 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   cursor: pointer;
 }
 .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.secondary {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* author display rules (.field, .row ...) must never beat the hidden attribute */
+[hidden] { display: none !important; }

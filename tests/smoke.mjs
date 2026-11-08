@@ -55,6 +55,23 @@ const cases = [
   { file: 'star-ring.svg', unit: 'ft', width: '2', paper: 'A4', landscape: false, overview: false, mode: 'edge', stroke: '2', sUnit: 'mm', order: false },
 ];
 
+// Read a STORE zip (what the app writes) into { name: Buffer }.
+function readZip(buf) {
+  const eocd = buf.length - 22;
+  if (buf.readUInt32LE(eocd) !== 0x06054b50) throw new Error('not a zip');
+  const n = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out = {};
+  for (let i = 0; i < n; i++) {
+    const size = buf.readUInt32LE(p + 24), nl = buf.readUInt16LE(p + 28), off = buf.readUInt32LE(p + 42);
+    const name = buf.toString('utf8', p + 46, p + 46 + nl);
+    const lnl = buf.readUInt16LE(off + 26);
+    out[name] = buf.subarray(off + 30 + lnl, off + 30 + lnl + size);
+    p += 46 + nl;
+  }
+  return out;
+}
+
 // Decoded content of the embedded artwork form (outline, plus numbers and hatching when on).
 async function formText(pdf) {
   for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
@@ -184,6 +201,67 @@ for (const [i, t] of cases.entries()) {
   await page.selectOption('#unit', 'cm');
   await page.fill('#width', '8');
   check((await page.textContent('#orderinfo')).includes('too small for a number'), 'tiny prints warn that some numbers will not fit');
+  await page.close();
+}
+
+// Cutting kit: checkbox reveals the options, the ZIP holds a cut file per page, a guide and the print PDF.
+for (const k of [
+  { machine: 'silhouette', style: 'perf', formats: ['svg', 'dxf'], mode: 'bordered' },
+  { machine: 'cricut', style: 'full', formats: ['svg'], mode: 'edge' },
+]) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, acceptDownloads: true });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(base);
+  await page.setInputFiles('#file', join(root, 'tests', 'fixtures', 'cat.svg'));
+  await page.selectOption('#unit', 'cm');
+  await page.fill('#width', '60');
+  await page.check(`input[name="mode"][value="${k.mode}"]`);
+  const tag = `kit (${k.machine}, ${k.style}, ${k.mode})`;
+  check(await page.isHidden('#kit'), `${tag}: kit button is hidden until the checkbox is ticked`);
+  await page.check('#machineOn');
+  check(await page.isVisible('#kit') && await page.isVisible('#machine'), `${tag}: checkbox reveals machine options and kit button`);
+  await page.selectOption('#machine', k.machine);
+  await page.selectOption('#cutstyle', k.style);
+  check((await page.isHidden('#bridgeField')) === (k.style === 'full'), `${tag}: bridge size only shows for spotted cuts`);
+  const pagesN = parseInt((await page.textContent('#summary')).match(/= (\d+) page/)[1], 10);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#kit')]);
+  const zpath = join(outDir, `kit-${k.machine}.zip`);
+  await dl.saveAs(zpath);
+  const z = readZip(await readFile(zpath));
+  const names = Object.keys(z);
+  const svgs = names.filter((n) => /^cut-files\/page-\d+_R\d+-C\d+\.svg$/.test(n));
+  check(svgs.length === pagesN, `${tag}: ${svgs.length} page cut files for ${pagesN} pages`);
+  check(names.includes('cut-files/00_alignment-test.svg'), `${tag}: alignment test file included`);
+  const dxfs = names.filter((n) => n.endsWith('.dxf')).length;
+  check(k.formats.includes('dxf') ? dxfs === pagesN + 1 : dxfs === 0, `${tag}: ${dxfs} DXF files (${k.formats.join('+')} expected)`);
+  const sv = z[svgs[0]].toString();
+  check(sv.startsWith('<?xml') && sv.includes('width="210mm"') && sv.includes('</svg>'), `${tag}: SVG is sheet-sized and well formed`);
+  const dashed = sv.match(/ d="([^"]*)"/)[1];
+  const pieces = (dashed.match(/M/g) || []).length;
+  check(k.style === 'perf' ? pieces > 40 : pieces < 40, `${tag}: ${pieces} cut pieces on page 1 (${k.style === 'perf' ? 'dashed' : 'continuous'})`);
+  const guide = names.find((n) => n.startsWith('cutting-guide-'));
+  const gdoc = await PDFDocument.load(z[guide]);
+  check(gdoc.getPageCount() >= 2, `${tag}: guide PDF has ${gdoc.getPageCount()} pages`);
+  const printName = names.find((n) => n.endsWith('.pdf') && n !== guide);
+  const pdoc = await PDFDocument.load(z[printName]);
+  check(pdoc.getPageCount() === pagesN, `${tag}: print PDF inside the kit has ${pdoc.getPageCount()} pages`);
+  check(errors.length === 0, `${tag}: no page errors ${errors.join('; ')}`);
+  await page.screenshot({ path: join(outDir, `kit-${k.machine}.png`) });
+  await page.close();
+}
+
+// A page that does not fit the machine's mat says so.
+{
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  await page.goto(base);
+  await page.click('#sample');
+  await page.check('#machineOn');
+  await page.selectOption('#machine', 'cricut-joy-xtra');
+  await page.selectOption('#paper', 'A3');
+  check((await page.textContent('#machineinfo')).includes('too big'), 'A3 on a Joy Xtra warns the paper is too big for the mat');
+  await page.selectOption('#paper', '5x7');
+  check((await page.textContent('#machineinfo')).includes('fits'), '5x7 on a Joy Xtra fits the mat');
   await page.close();
 }
 
