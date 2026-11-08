@@ -52,6 +52,21 @@
             </label>
           </div>
           <p class="hint">Enter either one; the other follows the artwork's proportions.</p>
+          <div class="row sub">
+            <label class="field">
+              <span>Line thickness</span>
+              <input type="number" id="stroke" value="2" min="0.1" step="any" inputmode="decimal">
+            </label>
+            <label class="field">
+              <span>Unit</span>
+              <select id="strokeUnit">
+                <option value="mm" selected>mm</option>
+                <option value="cm">cm</option>
+                <option value="in">in</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint" id="strokehint">Real printed thickness of the outline. It does not change with the artwork size.</p>
         </section>
 
         <section class="card" aria-labelledby="h-paper">
@@ -69,6 +84,14 @@
               </div>
             </div>
           </div>
+          <div class="field wide sub">
+            <span>Print style</span>
+            <div class="seg" role="radiogroup" aria-label="Print style">
+              <label><input type="radio" name="mode" value="edge" checked><span>Edge to edge</span></label>
+              <label><input type="radio" name="mode" value="bordered"><span>Bordered</span></label>
+            </div>
+          </div>
+          <p class="hint" id="modehint"></p>
           <label class="check">
             <input type="checkbox" id="overview">
             <span>Add an assembly map as the first page</span>
@@ -85,7 +108,7 @@
         <p class="warn" id="pagewarn" hidden></p>
         <div class="preview" id="preview" aria-label="Page layout preview"></div>
         <button type="button" class="primary" id="download" disabled>Download PDF</button>
-        <p class="hint">Print at 100% / "Actual size". Do not use "Fit to page". Crosses sit in the overlap; line them up on neighbouring pages, then tape.</p>
+        <p class="hint">Print at 100% / "Actual size". Do not use "Fit to page".</p>
       </section>
     </div>
   </main>

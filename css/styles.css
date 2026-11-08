@@ -116,6 +116,8 @@ body {
 .notes li + li { margin-top: 4px; }
 
 .row { display: flex; flex-wrap: wrap; gap: 12px; }
+.row.sub, .field.sub { margin-top: 14px; }
+.hint + .check { margin-top: 10px; }
 .field { display: grid; gap: 4px; flex: 1 1 100px; min-width: 0; }
 .field.grow, .field.wide { flex: 1 1 100%; }
 .field > span { font-size: 0.8rem; color: var(--muted); }
@@ -163,7 +165,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 .preview .tile.a { fill: var(--tile-a); }
 .preview .tile.b { fill: var(--tile-b); }
 .preview .tile { stroke: var(--tile-line); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
-.preview .art { fill: none; stroke: var(--art); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.preview .art { fill: none; stroke: var(--art); stroke-linejoin: round; stroke-linecap: round; }
 .preview .lbl { fill: var(--muted); font-family: system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
 .empty { color: var(--muted); font-size: 0.9rem; }
 

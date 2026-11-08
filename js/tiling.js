@@ -1,10 +1,19 @@
 // Units, paper sizes and tile layout maths. Everything here is in millimetres.
 
-export const STROKE_MM = 2;   // fixed outline thickness at real-world scale
-export const OVERLAP_MM = 10; // shared strip between neighbouring pages
 export const PT_PER_MM = 72 / 25.4;
 export const MAX_PAGES = 1000;
 export const WARN_PAGES = 100;
+
+// Edge-to-edge: neighbouring pages share this strip so slight paper drift never leaves a gap.
+export const OVERLAP_MM = 10;
+// Bordered: blank safe margin kept on every page for printers that cannot print to the edge.
+export const MARGIN_MM = 10;
+
+// Line thickness is chosen by the user and is a real-world size, independent of artwork size.
+export const STROKE_DEFAULT_MM = 2;
+export const STROKE_MIN_MM = 0.1;
+export const STROKE_MAX_MM = 100;
+export const STROKE_UNITS = { mm: 1, cm: 10, in: 25.4 };
 
 export const MM_PER = { ft: 304.8, in: 25.4, cm: 10, m: 1000 };
 
@@ -35,21 +44,31 @@ export function pageDims(paper, orientation) {
 
 /**
  * Grid of pages needed to cover an artwork.
- * artW/artH: artwork size in mm (geometry only, without stroke).
- * The grid covers the artwork plus half a stroke on every side so the outer
- * edge of the line is never clipped.
+ *
+ * Each page shows a "window" of the artwork:
+ *  - mode 'edge':     the window is the whole page; neighbours overlap by OVERLAP_MM.
+ *  - mode 'bordered': the window is the page minus MARGIN_MM on every side; windows
+ *                     tile exactly (no overlap). On sides that touch a neighbour the
+ *                     margin is cut off along the cut marks; on the outside it stays.
+ *
+ * artW/artH: artwork geometry in mm. The grid adds half a stroke on every side
+ * so the outer edge of the line is never clipped.
  */
-export function computeLayout(artW, artH, paper, orientation, overlap = OVERLAP_MM) {
+export function computeLayout(artW, artH, paper, orientation, { mode = 'edge', strokeMm = STROKE_DEFAULT_MM } = {}) {
   const { pw, ph } = pageDims(paper, orientation);
-  const gridW = artW + STROKE_MM, gridH = artH + STROKE_MM;
-  const stepX = pw - overlap, stepY = ph - overlap;
+  const bordered = mode === 'bordered';
+  const inset = bordered ? MARGIN_MM : 0;
+  const overlap = bordered ? 0 : OVERLAP_MM;
+  const winW = pw - 2 * inset, winH = ph - 2 * inset;
+  const gridW = artW + strokeMm, gridH = artH + strokeMm;
+  const stepX = winW - overlap, stepY = winH - overlap;
   const eps = 1e-9;
-  const cols = gridW <= pw + eps ? 1 : Math.ceil((gridW - overlap) / stepX - eps);
-  const rows = gridH <= ph + eps ? 1 : Math.ceil((gridH - overlap) / stepY - eps);
+  const cols = gridW <= winW + eps ? 1 : Math.ceil((gridW - overlap) / stepX - eps);
+  const rows = gridH <= winH + eps ? 1 : Math.ceil((gridH - overlap) / stepY - eps);
   return {
-    pw, ph, overlap, gridW, gridH, stepX, stepY, cols, rows,
+    mode, bordered, strokeMm, pw, ph, inset, overlap, winW, winH, gridW, gridH, stepX, stepY, cols, rows,
     pages: cols * rows,
-    totalW: (cols - 1) * stepX + pw,
-    totalH: (rows - 1) * stepY + ph,
+    totalW: (cols - 1) * stepX + winW,
+    totalH: (rows - 1) * stepY + winH,
   };
 }

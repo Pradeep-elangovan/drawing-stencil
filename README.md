@@ -24,11 +24,20 @@ It also deploys as-is to GitHub Pages, Netlify, etc.
   skipped with a warning (convert text to paths first).
 - **Size:** you give width or height (ft, in, cm, m); the other follows the artwork's aspect
   ratio. The size refers to the artwork's geometry bounding box.
-- **Line:** black, fixed 2 mm thick at real-world scale.
-- **Tiling:** pages are margin-less with a 10 mm overlap between neighbours. Registration
-  crosses sit mid-overlap, so the same cross appears at the same spot on adjacent pages: line
-  them up, then tape. Each page carries a label like `R2-C3  6/12` inside the page.
-  Pages run left to right, top to bottom.
+- **Line thickness:** you choose it (mm, cm or in; default 2 mm, range 0.1 to 100 mm). It is a
+  real printed thickness and does not grow or shrink with the artwork size. The preview draws it
+  at true scale.
+- **Print style** (toggle):
+  - *Edge to edge* (default): margin-less pages with a 10 mm overlap between neighbours, so a
+    slightly shifted sheet never leaves a gap. Grey registration crosses sit mid-overlap; line
+    them up on neighbouring pages, then tape.
+  - *Bordered*: for printers that cannot print to the edge. Every page keeps a blank 1 cm margin.
+    Cut marks appear only on sides that join a neighbouring page (cut the margin off along the
+    marks and butt the pages together); the outer sides of the whole grid keep their margin and
+    have no marks. In a 3x3 grid the top row keeps its top margin, the left column its left
+    margin, the right column its right margin and the bottom row its bottom margin.
+  - Each page carries a label like `R2-C3  6/12` inside the page. Pages run left to right, top
+    to bottom.
 - **Paper:** A5, A4 (default), A3, Letter, Legal, Tabloid, 4x6, 5x7; portrait or landscape.
 - **PDF:** vector paths embedded once and reused per page, so lines stay crisp at any size.
   An optional assembly-map page can be added first.

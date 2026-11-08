@@ -1,6 +1,7 @@
 import { parseSvg, toPathD } from './svg-outline.js';
 import {
-  MM_PER, PAPERS, STROKE_MM, MAX_PAGES, WARN_PAGES, paperLabel, computeLayout,
+  MM_PER, PAPERS, MAX_PAGES, WARN_PAGES, MARGIN_MM, OVERLAP_MM,
+  STROKE_DEFAULT_MM, STROKE_MIN_MM, STROKE_MAX_MM, STROKE_UNITS, paperLabel, computeLayout,
 } from './tiling.js';
 import { buildPdf } from './pdf.js';
 
@@ -10,7 +11,9 @@ const el = {
   warnings: $('warnings'), steps: $('steps'), unit: $('unit'), width: $('width'), height: $('height'),
   paper: $('paper'), overview: $('overview'), orientHint: $('orienthint'), summary: $('summary'),
   pageWarn: $('pagewarn'), preview: $('preview'), download: $('download'),
+  stroke: $('stroke'), strokeUnit: $('strokeUnit'), strokeHint: $('strokehint'), modeHint: $('modehint'),
 };
+const STROKE_HINT = el.strokeHint.textContent;
 
 const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
   <circle cx="100" cy="100" r="95" fill="#222"/>
@@ -21,6 +24,7 @@ const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200
 const state = {
   name: 'stencil', parsed: null, d: '',
   widthMm: 2 * MM_PER.ft, // default request: 2 ft wide
+  strokeMm: STROKE_DEFAULT_MM,
   valid: false, layout: null, busy: false,
 };
 
@@ -33,8 +37,11 @@ for (const key of Object.keys(PAPERS)) {
 }
 
 const orientation = () => document.querySelector('input[name="orient"]:checked').value;
+const printMode = () => document.querySelector('input[name="mode"]:checked').value;
 const unitMm = () => MM_PER[el.unit.value];
+const strokeUnitMm = () => STROKE_UNITS[el.strokeUnit.value];
 const fmt = (v) => String(Math.round(v * 100) / 100);
+const fmtStroke = (v) => String(Math.round(v * 1000) / 1000);
 const aspect = () => state.parsed.bbox.h / state.parsed.bbox.w; // height per unit width
 
 // ------------------------------------------------------------------ loading
@@ -119,7 +126,25 @@ el.unit.addEventListener('change', () => {
 });
 el.paper.addEventListener('change', update);
 el.overview.addEventListener('change', update);
-for (const r of document.querySelectorAll('input[name="orient"]')) r.addEventListener('change', update);
+for (const r of document.querySelectorAll('input[name="orient"], input[name="mode"]')) r.addEventListener('change', update);
+
+// ------------------------------------------------------------------ line thickness
+
+function strokeOk() {
+  const v = parseFloat(el.stroke.value) * strokeUnitMm();
+  return v >= STROKE_MIN_MM - 1e-9 && v <= STROKE_MAX_MM + 1e-9;
+}
+
+el.stroke.addEventListener('input', () => {
+  if (strokeOk()) state.strokeMm = parseFloat(el.stroke.value) * strokeUnitMm();
+  update();
+});
+
+el.strokeUnit.addEventListener('change', () => {
+  // keep the physical thickness, re-express it in the new unit
+  el.stroke.value = fmtStroke(state.strokeMm / strokeUnitMm());
+  update();
+});
 
 // ------------------------------------------------------------------ render
 
@@ -128,11 +153,19 @@ function hasSize() {
 }
 
 function update() {
-  const ok = hasSize();
+  const sOk = strokeOk();
+  el.strokeHint.textContent = sOk ? STROKE_HINT : `Line thickness must be between ${STROKE_MIN_MM} mm and ${STROKE_MAX_MM} mm.`;
+  el.strokeHint.style.color = sOk ? '' : 'var(--err)';
+  el.modeHint.textContent = printMode() === 'edge'
+    ? `Pages print to the edge and overlap by ${OVERLAP_MM / 10} cm. Line up the grey crosses on neighbouring pages and tape.`
+    : `Every page keeps a ${MARGIN_MM / 10} cm blank margin. Where a page joins a neighbour, cut the margin off along the cut marks and butt the pages together; outer sides keep their margin.`;
+
+  const ok = hasSize() && sOk;
   state.valid = ok;
   if (!ok) {
     state.layout = null;
-    el.summary.textContent = state.parsed ? 'Enter a width or height greater than zero.' : 'Load an SVG to see the page layout.';
+    el.summary.textContent = !state.parsed ? 'Load an SVG to see the page layout.'
+      : !sOk ? 'Fix the line thickness to see the layout.' : 'Enter a width or height greater than zero.';
     el.pageWarn.hidden = true;
     el.orientHint.textContent = '';
     el.preview.innerHTML = '<span class="empty">The tile preview appears here.</span>';
@@ -141,7 +174,8 @@ function update() {
   }
 
   const artW = state.widthMm, artH = state.widthMm * aspect();
-  const L = computeLayout(artW, artH, el.paper.value, orientation());
+  const opts = { mode: printMode(), strokeMm: state.strokeMm };
+  const L = computeLayout(artW, artH, el.paper.value, orientation(), opts);
   state.layout = L;
 
   const u = el.unit.value;
@@ -155,7 +189,7 @@ function update() {
   el.pageWarn.hidden = !(tooMany || L.pages > WARN_PAGES);
 
   const other = orientation() === 'portrait' ? 'landscape' : 'portrait';
-  const O = computeLayout(artW, artH, el.paper.value, other);
+  const O = computeLayout(artW, artH, el.paper.value, other, opts);
   el.orientHint.textContent = O.pages === L.pages
     ? `${other[0].toUpperCase()}${other.slice(1)} needs the same number of pages.`
     : `${other[0].toUpperCase()}${other.slice(1)} would need ${O.pages} page${O.pages === 1 ? '' : 's'}.`;
@@ -167,24 +201,27 @@ function update() {
 function renderPreview(L) {
   const { parsed } = state;
   const s = state.widthMm / parsed.bbox.w;
-  const pad = STROKE_MM / 2;
+  const pad = L.strokeMm / 2;
   const tx = pad - parsed.bbox.minX * s, ty = pad - parsed.bbox.minY * s;
   const m = Math.max(L.pw, L.ph) * 0.02;
-  const fs = Math.min(L.pw, L.ph) * 0.09;
+  const fs = Math.min(L.winW, L.winH) * 0.09;
+  // Preview line is drawn at its true printed thickness (in artwork units: mm / scale).
+  // Only if that would be thinner than ~1/700 of the preview width do we widen it so it stays visible.
+  const sw = Math.max(L.strokeMm, L.totalW / 700) / s;
   let tiles = '';
   let n = 0;
   for (let r = 0; r < L.rows; r++) {
     for (let c = 0; c < L.cols; c++) {
       n++;
       const x = c * L.stepX, y = r * L.stepY;
-      tiles += `<rect class="tile ${(r + c) % 2 ? 'b' : 'a'}" x="${x}" y="${y}" width="${L.pw}" height="${L.ph}"/>` +
-        `<text class="lbl" x="${x + L.pw / 2}" y="${y + L.ph - fs}" font-size="${fs}">R${r + 1}-C${c + 1} (${n})</text>`;
+      tiles += `<rect class="tile ${(r + c) % 2 ? 'b' : 'a'}" x="${x}" y="${y}" width="${L.winW}" height="${L.winH}"/>` +
+        `<text class="lbl" x="${x + L.winW / 2}" y="${y + L.winH - fs}" font-size="${fs}">R${r + 1}-C${c + 1} (${n})</text>`;
     }
   }
   el.preview.innerHTML =
     `<svg viewBox="${-m} ${-m} ${L.totalW + 2 * m} ${L.totalH + 2 * m}" role="img" aria-label="Artwork placed on a grid of pages">` +
     tiles +
-    `<g transform="translate(${tx} ${ty}) scale(${s})"><path class="art" d="${state.d}"/></g></svg>`;
+    `<g transform="translate(${tx} ${ty}) scale(${s})"><path class="art" style="stroke-width:${sw}" d="${state.d}"/></g></svg>`;
 }
 
 // ------------------------------------------------------------------ download
@@ -203,6 +240,8 @@ el.download.addEventListener('click', async () => {
       subpaths: state.parsed.subpaths,
       bbox: state.parsed.bbox,
       widthMm: state.widthMm,
+      strokeMm: state.strokeMm,
+      mode: printMode(),
       paper: el.paper.value,
       orientation: orientation(),
       overview: el.overview.checked,
