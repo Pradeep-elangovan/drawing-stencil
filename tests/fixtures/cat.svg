@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520">
+  <!-- Solid line-art cat, like clip art: thick dark lines are filled shapes with holes. -->
+  <!-- head line: outer edge + inner edge (hole = the face) -->
+  <path fill="#111" fill-rule="evenodd" d="
+    M70 120 L95 30 L165 78 Q200 68 235 78 L305 30 L330 120 Q342 205 285 255 Q200 300 115 255 Q58 205 70 120 Z
+    M96 128 L106 74 L168 104 Q200 95 232 104 L294 74 L304 128 Q312 195 270 235 Q200 270 130 235 Q88 195 96 128 Z"/>
+  <!-- eyes: dark discs with a white highlight -->
+  <circle cx="148" cy="165" r="19" fill="#111"/>
+  <circle cx="143" cy="159" r="6" fill="#fff"/>
+  <circle cx="252" cy="165" r="19" fill="#111"/>
+  <circle cx="247" cy="159" r="6" fill="#fff"/>
+  <!-- nose: a ring -->
+  <path fill="#111" fill-rule="evenodd" d="M200 185 m-17 0 a17 11 0 1 0 34 0 a17 11 0 1 0 -34 0 Z M200 185 m-9 0 a9 5 0 1 0 18 0 a9 5 0 1 0 -18 0 Z"/>
+  <!-- mouth -->
+  <path fill="#111" d="M176 208 Q200 240 224 208 L217 204 Q200 226 183 204 Z"/>
+  <!-- forehead stripes -->
+  <path fill="#111" d="M185 100 Q190 120 188 140 L196 140 Q198 118 193 98 Z"/>
+  <path fill="#111" d="M215 100 Q210 120 212 140 L204 140 Q202 118 207 98 Z"/>
+  <!-- whiskers cross the head line -->
+  <path fill="#111" d="M40 175 L118 182 L117 192 L38 187 Z"/>
+  <path fill="#111" d="M362 175 L284 182 L285 192 L364 187 Z"/>
+  <!-- body line + hole -->
+  <path fill="#111" fill-rule="evenodd" d="
+    M120 285 Q85 360 110 470 L160 470 L200 420 L240 470 L290 470 Q315 360 280 285 Q200 315 120 285 Z
+    M142 305 Q112 365 132 450 L150 450 L200 380 L250 450 L268 450 Q288 365 258 305 Q200 330 142 305 Z"/>
+  <!-- tail -->
+  <path fill="#111" fill-rule="evenodd" d="
+    M290 420 Q350 440 372 380 Q380 350 360 345 Q352 395 300 400 Z
+    M306 412 Q345 420 360 380 Q362 370 358 368 Q345 400 306 400 Z"/>
+</svg>

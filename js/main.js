@@ -1,4 +1,5 @@
 import { parseSvg, toPathD } from './svg-outline.js';
+import { analyzeOrder, numberSize, HATCH_MM } from './order.js';
 import {
   MM_PER, PAPERS, MAX_PAGES, WARN_PAGES, MARGIN_MM, OVERLAP_MM,
   STROKE_DEFAULT_MM, STROKE_MIN_MM, STROKE_MAX_MM, STROKE_UNITS, paperLabel, computeLayout,
@@ -12,6 +13,7 @@ const el = {
   paper: $('paper'), overview: $('overview'), orientHint: $('orienthint'), summary: $('summary'),
   pageWarn: $('pagewarn'), preview: $('preview'), download: $('download'),
   stroke: $('stroke'), strokeUnit: $('strokeUnit'), strokeHint: $('strokehint'), modeHint: $('modehint'),
+  order: $('order'), orderInfo: $('orderinfo'),
 };
 const STROKE_HINT = el.strokeHint.textContent;
 
@@ -25,6 +27,7 @@ const state = {
   name: 'stencil', parsed: null, d: '',
   widthMm: 2 * MM_PER.ft, // default request: 2 ft wide
   strokeMm: STROKE_DEFAULT_MM,
+  order: null, // cut-order analysis of the loaded SVG
   valid: false, layout: null, busy: false,
 };
 
@@ -57,6 +60,7 @@ function load(text, name) {
     const parsed = parseSvg(text);
     state.parsed = parsed;
     state.d = toPathD(parsed.subpaths);
+    state.order = analyzeOrder(parsed.subpaths);
     state.name = name;
     el.info.hidden = false;
     el.info.textContent =
@@ -69,6 +73,7 @@ function load(text, name) {
     update();
   } catch (e) {
     state.parsed = null;
+    state.order = null;
     state.valid = false;
     el.steps.disabled = true;
     el.info.hidden = true;
@@ -126,6 +131,7 @@ el.unit.addEventListener('change', () => {
 });
 el.paper.addEventListener('change', update);
 el.overview.addEventListener('change', update);
+el.order.addEventListener('change', update);
 for (const r of document.querySelectorAll('input[name="orient"], input[name="mode"]')) r.addEventListener('change', update);
 
 // ------------------------------------------------------------------ line thickness
@@ -159,6 +165,8 @@ function update() {
   el.modeHint.textContent = printMode() === 'edge'
     ? `Pages print to the edge and overlap by ${OVERLAP_MM / 10} cm. Line up the grey crosses on neighbouring pages and tape.`
     : `Every page keeps a ${MARGIN_MM / 10} cm blank margin. Where a page joins a neighbour, cut the margin off along the cut marks and butt the pages together; outer sides keep their margin.`;
+
+  renderOrderInfo();
 
   const ok = hasSize() && sOk;
   state.valid = ok;
@@ -198,6 +206,63 @@ function update() {
   el.download.disabled = state.busy || tooMany;
 }
 
+// Order guide is only drawn when the toggle is on and there is something to number.
+function guideOn() {
+  const o = state.order;
+  return el.order.checked && !!o && !o.skipped && (o.cut.length > 0 || o.keep.length > 0);
+}
+
+function renderOrderInfo() {
+  const o = state.order;
+  const parts = [];
+  let caution = '';
+  if (!o) el.orderInfo.textContent = '';
+  else if (o.skipped) { el.orderInfo.textContent = ''; caution = o.skipped; }
+  else if (!o.cut.length) el.orderInfo.textContent = 'No closed shapes to number in this SVG.';
+  else {
+    parts.push(`${o.cut.length} shape${o.cut.length === 1 ? '' : 's'} to cut in ${o.passes} pass${o.passes === 1 ? '' : 'es'}`);
+    if (o.keep.length) parts.push(`${o.keep.length} area${o.keep.length === 1 ? '' : 's'} to leave uncut`);
+    el.orderInfo.textContent = parts.join('. ') + '.';
+    if (hasSize()) {
+      const mmPerUnit = state.widthMm / state.parsed.bbox.w;
+      const tiny = o.cut.filter((s) => numberSize(String(s.order).length, s.label.d * mmPerUnit).tiny).length;
+      if (tiny) caution = `${tiny} shape${tiny === 1 ? ' is' : 's are'} too small for a number at this size. The number is printed at the smallest legible size and may touch the outline.`;
+    }
+    if (o.openCount) caution += `${caution ? ' ' : ''}${o.openCount} open line${o.openCount === 1 ? '' : 's'} not numbered.`;
+  }
+  if (caution) {
+    const span = Object.assign(document.createElement('span'), { className: 'caution', textContent: caution });
+    el.orderInfo.append(span);
+  }
+}
+
+function guideMarkup(s) {
+  if (!guideOn()) return '';
+  const hs = HATCH_MM / s;
+  let svg = `<defs><pattern id="hatch" width="${hs}" height="${hs}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">` +
+    `<line x1="0" y1="0" x2="0" y2="${hs}" stroke="var(--hatch)" stroke-width="${0.25 / s}"/></pattern></defs>`;
+  const { minX, minY, w, h } = state.parsed.bbox;
+  const frame = `M${minX - w} ${minY - h}H${minX + 2 * w}V${minY + 2 * h}H${minX - w}Z`;
+  state.order.keep.forEach((k, i) => {
+    const fill = `<path d="${toPathD([k.sub])}" fill="url(#hatch)" stroke="none"${k.children.length ? ` clip-path="url(#hc${i})"` : ''}/>`;
+    if (!k.children.length) { svg += fill; return; }
+    // hatch the area but never its children, even when a child pokes out of it
+    svg += `<clipPath id="hc${i}"><path clip-rule="evenodd" d="${frame}${toPathD(k.children.map((c) => c.sub))}"/></clipPath>${fill}`;
+  });
+  return svg;
+}
+
+function numbersMarkup(s) {
+  if (!guideOn()) return '';
+  let svg = '';
+  for (const c of state.order.cut) {
+    const text = String(c.order);
+    const { fsMm } = numberSize(text.length, c.label.d * s);
+    svg += `<text class="num" x="${c.label.x}" y="${c.label.y}" font-size="${fsMm / s}">${text}</text>`;
+  }
+  return svg;
+}
+
 function renderPreview(L) {
   const { parsed } = state;
   const s = state.widthMm / parsed.bbox.w;
@@ -221,7 +286,8 @@ function renderPreview(L) {
   el.preview.innerHTML =
     `<svg viewBox="${-m} ${-m} ${L.totalW + 2 * m} ${L.totalH + 2 * m}" role="img" aria-label="Artwork placed on a grid of pages">` +
     tiles +
-    `<g transform="translate(${tx} ${ty}) scale(${s})"><path class="art" style="stroke-width:${sw}" d="${state.d}"/></g></svg>`;
+    `<g transform="translate(${tx} ${ty}) scale(${s})">${guideMarkup(s)}` +
+    `<path class="art" style="stroke-width:${sw}" d="${state.d}"/>${numbersMarkup(s)}</g></svg>`;
 }
 
 // ------------------------------------------------------------------ download
@@ -245,6 +311,7 @@ el.download.addEventListener('click', async () => {
       paper: el.paper.value,
       orientation: orientation(),
       overview: el.overview.checked,
+      order: guideOn() ? state.order : null,
       title: state.name,
     });
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));

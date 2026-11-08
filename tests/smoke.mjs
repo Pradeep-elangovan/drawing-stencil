@@ -29,7 +29,7 @@ await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}/`;
 
 const MM = 25.4 / 72;
-const PAPER = { A4: [210, 297], Letter: [215.9, 279.4], A3: [297, 420] };
+const PAPER = { A4: [210, 297], Letter: [215.9, 279.4], A3: [297, 420], '5x7': [127, 177.8] };
 const STROKE_UNIT = { mm: 1, cm: 10, in: 25.4 };
 
 // Independent re-statement of the layout rules (kept separate from js/tiling.js on purpose).
@@ -50,18 +50,24 @@ const cases = [
   { file: 'star-ring.svg', unit: 'ft', width: '3', paper: 'A4', landscape: false, overview: true, mode: 'bordered', stroke: '6', sUnit: 'mm' },
   { file: 'mixed-features.svg', unit: 'cm', width: '90', paper: 'Letter', landscape: true, overview: false, mode: 'bordered', stroke: '0.5', sUnit: 'cm' },
   { file: 'mixed-features.svg', unit: 'in', width: '10', paper: 'A4', landscape: false, overview: false, mode: 'edge', stroke: '0.1', sUnit: 'in' },
+  { file: 'cat.svg', unit: 'cm', width: '60', paper: 'A4', landscape: false, overview: true, mode: 'bordered', stroke: '2', sUnit: 'mm' },
+  { file: 'nested.svg', unit: 'cm', width: '40', paper: '5x7', landscape: false, overview: true, mode: 'edge', stroke: '2', sUnit: 'mm' },
+  { file: 'star-ring.svg', unit: 'ft', width: '2', paper: 'A4', landscape: false, overview: false, mode: 'edge', stroke: '2', sUnit: 'mm', order: false },
 ];
 
-// Read the line width (in mm) out of the embedded artwork form: the first operator is "<pt> w".
-async function strokeFromPdf(pdf) {
+// Decoded content of the embedded artwork form (outline, plus numbers and hatching when on).
+async function formText(pdf) {
   for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
     if (!(obj instanceof PDFRawStream)) continue;
     if (String(obj.dict.get(PDFName.of('Subtype'))) !== '/Form') continue;
-    const text = Buffer.from(decodePDFRawStream(obj).decode()).toString('latin1');
-    const m = /^([\d.]+) w/.exec(text);
-    if (m) return parseFloat(m[1]) * MM;
+    return Buffer.from(decodePDFRawStream(obj).decode()).toString('latin1');
   }
-  return NaN;
+  return '';
+}
+// The outline width is the "w" that precedes "1 J / 1 j / 0 G" (hatching uses its own width).
+async function strokeFromPdf(pdf) {
+  const m = /([\d.]+) w\n1 J\n1 j\n0 G/.exec(await formText(pdf));
+  return m ? parseFloat(m[1]) * MM : NaN;
 }
 
 const browser = await chromium.launch();
@@ -82,6 +88,7 @@ for (const [i, t] of cases.entries()) {
   if (t.landscape) await page.check('input[name="orient"][value="landscape"]');
   await page.check(`input[name="mode"][value="${t.mode}"]`);
   if (t.overview) await page.check('#overview');
+  if (t.order === false) await page.uncheck('#order');
 
   const unitMm = { ft: 304.8, in: 25.4, cm: 10, m: 1000 }[t.unit];
   const strokeMm = parseFloat(t.stroke) * STROKE_UNIT[t.sUnit];
@@ -105,6 +112,16 @@ for (const [i, t] of cases.entries()) {
     `${tag}: page size ${(width * MM).toFixed(1)}x${(height * MM).toFixed(1)} mm`);
   const got = await strokeFromPdf(pdf);
   check(Math.abs(got - strokeMm) < 0.01, `${tag}: PDF line thickness ${got.toFixed(3)} mm, expected ${strokeMm}`);
+  // cut-order guide: one number per shape to cut (plus hatching) inside the art form, or nothing when off
+  const text = await formText(pdf);
+  const texts = (text.match(/\bBT\b/g) || []).length;
+  if (t.order === false) {
+    check(texts === 0 && !text.includes('W*'), `${tag}: guide off leaves no numbers or hatching in the PDF`);
+  } else {
+    const cutN = parseInt(await page.textContent('#orderinfo'), 10);
+    check(texts === cutN && text.includes('(1) Tj') && text.includes(`(${cutN}) Tj`),
+      `${tag}: ${texts} cut-order numbers in the PDF, UI says ${cutN} shapes to cut`);
+  }
   await page.close();
 }
 
@@ -145,6 +162,28 @@ for (const [i, t] of cases.entries()) {
   // bordered mode changes the hint text
   await page.check('input[name="mode"][value="bordered"]');
   check((await page.textContent('#modehint')).includes('cut marks'), 'bordered mode explains cut marks');
+  await page.close();
+}
+
+// Cut guide in the UI: the sample is a ring with a star in its hole, so the star is cut first.
+{
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  await page.goto(base);
+  await page.click('#sample');
+  const info = await page.textContent('#orderinfo');
+  check(info.includes('2 shapes to cut in 2 passes') && info.includes('1 area to leave uncut'), `sample reports its cut order (${info.trim()})`);
+  const nums = await page.$$eval('.preview .num', (n) => n.map((x) => x.textContent));
+  check(nums.join(',') === '1,2', `preview numbers the star 1 and the ring 2 (${nums})`);
+  check((await page.$$('.preview path[fill="url(#hatch)"]')).length === 1, 'preview hatches the one area left uncut');
+  await page.uncheck('#order');
+  check((await page.$$('.preview .num')).length === 0 && (await page.$$('.preview path[fill="url(#hatch)"]')).length === 0,
+    'toggling the guide off removes numbers and hatching from the preview');
+  await page.check('#order');
+  // a very small print makes the numbers too big for their shapes: warn
+  await page.setInputFiles('#file', join(root, 'tests', 'fixtures', 'cat.svg'));
+  await page.selectOption('#unit', 'cm');
+  await page.fill('#width', '8');
+  check((await page.textContent('#orderinfo')).includes('too small for a number'), 'tiny prints warn that some numbers will not fit');
   await page.close();
 }
 

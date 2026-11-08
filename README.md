@@ -38,6 +38,19 @@ It also deploys as-is to GitHub Pages, Netlify, etc.
     margin, the right column its right margin and the bottom row its bottom margin.
   - Each page carries a label like `R2-C3  6/12` inside the page. Pages run left to right, top
     to bottom.
+- **Cut guide** (toggle, on by default): tells you what to cut, in what order, and what to leave.
+  - *Why order matters:* once you cut a big shape out, the paper inside it is gone, so it can no
+    longer be a stencil for the small details in there. Details nested inside a shape are
+    therefore numbered **before** the shape around them: 1 is cut first, the highest number last.
+  - *Red numbers* sit in the free part of each shape you cut (clear of any hole inside it).
+  - *Grey hatching* marks paper to **leave uncut**: the holes in solid shapes, such as the white
+    inside a ring or the face area inside a thick head outline.
+  - *How it decides:* it builds the nesting of all closed outlines. A filled shape directly
+    inside another filled shape is a hole in it (cut, keep, cut, keep ... as you go inwards).
+    A shape that is only an outline, with no fill, is always cut. Shapes that are only partly
+    inside another are treated as neighbours, not as children.
+  - Open lines (not closed shapes) are not numbered. SVGs with more than 2000 closed shapes
+    are not numbered.
 - **Paper:** A5, A4 (default), A3, Letter, Legal, Tabloid, 4x6, 5x7; portrait or landscape.
 - **PDF:** vector paths embedded once and reused per page, so lines stay crisp at any size.
   An optional assembly-map page can be added first.
@@ -50,6 +63,7 @@ index.html        UI
 css/styles.css
 js/svg-outline.js SVG parsing -> outline geometry
 js/tiling.js      units, paper sizes, grid maths
+js/order.js       nesting, cut/keep roles, cut order, label points
 js/pdf.js         PDF generation (pdf-lib)
 js/main.js        UI wiring and preview
 vendor/           pdf-lib (MIT)
@@ -59,7 +73,9 @@ tests/            fixtures + Playwright smoke test
 ## Tests
 
 ```sh
-NODE_PATH=<dir with playwright and pdf-lib> node tests/smoke.mjs
+node tests/order.test.mjs                                   # cut-order logic, no browser needed
+NODE_PATH=<dir with playwright and pdf-lib> node tests/smoke.mjs   # end to end in headless Chromium
 ```
 
-Drives the real app in headless Chromium, downloads PDFs and checks page counts and sizes.
+The smoke test drives the real app, downloads PDFs and checks page counts and sizes, the line
+thickness written into the PDF, and the cut-order numbers.

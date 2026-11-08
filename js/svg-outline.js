@@ -428,6 +428,7 @@ export function parseSvg(text) {
       const t = transformSub(s, mm);
       // A filled shape's outline is its closed boundary, even if the path was left open.
       if (fillOn) t.closed = true;
+      t.filled = fillOn; // lets the cut-order analysis tell holes from separate outlines
       subpaths.push(t);
     }
   }

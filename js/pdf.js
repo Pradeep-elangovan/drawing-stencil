@@ -12,24 +12,73 @@
 //              of the whole grid keep their margin and get no marks).
 
 import { PT_PER_MM, computeLayout } from './tiling.js';
+import { numberSize, HATCH_MM } from './order.js';
 
 const num = (v) => String(Math.round(v * 1000) / 1000);
 
-function artworkStream(subpaths, bbox, scale, gridH, strokeMm) {
+// Everything the guide draws sits inside the shared art form, so it is shifted and
+// clipped per page together with the outline.
+function artworkStream(subpaths, bbox, scale, gridH, strokeMm, guide) {
   // Source space is y-down (SVG); the form is y-up (PDF), so flip against gridH.
   const pad = strokeMm / 2;
-  const X = (x) => num(((x - bbox.minX) * scale + pad) * PT_PER_MM);
-  const Y = (y) => num((gridH - ((y - bbox.minY) * scale + pad)) * PT_PER_MM);
-  const out = [`${num(strokeMm * PT_PER_MM)} w`, '1 J', '1 j', '0 G'];
-  for (const s of subpaths) {
-    out.push(`${X(s.start[0])} ${Y(s.start[1])} m`);
-    for (const g of s.segs) {
-      if (g[0] === 'L') out.push(`${X(g[1])} ${Y(g[2])} l`);
-      else out.push(`${X(g[1])} ${Y(g[2])} ${X(g[3])} ${Y(g[4])} ${X(g[5])} ${Y(g[6])} c`);
+  const fx = (x) => ((x - bbox.minX) * scale + pad) * PT_PER_MM;
+  const fy = (y) => (gridH - ((y - bbox.minY) * scale + pad)) * PT_PER_MM;
+  const X = (x) => num(fx(x));
+  const Y = (y) => num(fy(y));
+  const formW = (bbox.w * scale + strokeMm) * PT_PER_MM, formH = gridH * PT_PER_MM;
+  const pathOps = (subs) => {
+    const ops = [];
+    for (const s of subs) {
+      ops.push(`${X(s.start[0])} ${Y(s.start[1])} m`);
+      for (const g of s.segs) {
+        if (g[0] === 'L') ops.push(`${X(g[1])} ${Y(g[2])} l`);
+        else ops.push(`${X(g[1])} ${Y(g[2])} ${X(g[3])} ${Y(g[4])} ${X(g[5])} ${Y(g[6])} c`);
+      }
+      if (s.closed) ops.push('h');
     }
-    if (s.closed) out.push('h');
+    return ops;
+  };
+
+  const out = [];
+
+  // 1. hatching over the areas that stay uncut (drawn first, so outlines sit on top)
+  if (guide) {
+    for (const k of guide.order.keep) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < k.pts.length; i += 2) {
+        const px = fx(k.pts[i]), py = fy(k.pts[i + 1]);
+        if (px < x0) x0 = px; if (px > x1) x1 = px;
+        if (py < y0) y0 = py; if (py > y1) y1 = py;
+      }
+      let step = HATCH_MM * PT_PER_MM * Math.SQRT2; // spacing along y for 45 degree lines
+      const lines = (y1 - y0 + (x1 - x0)) / step;
+      if (lines > 6000) step *= lines / 6000; // keep huge regions from bloating the file
+      // clip to the area, then (second clip, intersected) to everything outside its
+      // children, so a child that pokes out of the area is never hatched
+      out.push('q', ...pathOps([k.sub]), 'W* n');
+      if (k.children.length) {
+        out.push(`-10 -10 ${num(formW + 20)} ${num(formH + 20)} re`, ...pathOps(k.children.map((c) => c.sub)), 'W* n');
+      }
+      out.push('0.55 G', `${num(0.25 * PT_PER_MM)} w`);
+      for (let c = y0 - x1; c <= y1 - x0; c += step) out.push(`${num(x0)} ${num(x0 + c)} m ${num(x1)} ${num(x1 + c)} l`);
+      out.push('S', 'Q');
+    }
   }
-  out.push('S');
+
+  // 2. the outlines themselves
+  out.push(`${num(strokeMm * PT_PER_MM)} w`, '1 J', '1 j', '0 G', ...pathOps(subpaths), 'S');
+
+  // 3. cut-order numbers, centred in the free part of each shape
+  if (guide) {
+    out.push('0.75 0.1 0.1 rg');
+    for (const s of guide.order.cut) {
+      const text = String(s.order);
+      const { fsMm } = numberSize(text.length, s.label.d * scale);
+      const size = fsMm * PT_PER_MM;
+      const w = guide.font.widthOfTextAtSize(text, size);
+      out.push('BT', `/F1 ${num(size)} Tf`, `${num(fx(s.label.x) - w / 2)} ${num(fy(s.label.y) - size * 0.36)} Td`, `(${text}) Tj`, 'ET');
+    }
+  }
   return out.join('\n');
 }
 
@@ -43,11 +92,12 @@ function artworkStream(subpaths, bbox, scale, gridH, strokeMm) {
  * @param {string} o.paper      key of PAPERS
  * @param {'portrait'|'landscape'} o.orientation
  * @param {boolean} o.overview  add an assembly-map page first
+ * @param {object|null} [o.order] result of analyzeOrder(); when given, numbers and hatching are drawn
  * @param {string} [o.title]
  * @returns {Promise<Uint8Array>}
  */
 export async function buildPdf({
-  subpaths, bbox, widthMm, strokeMm, mode, paper, orientation, overview, title = 'Stencil',
+  subpaths, bbox, widthMm, strokeMm, mode, paper, orientation, overview, order = null, title = 'Stencil',
 }) {
   const PL = globalThis.PDFLib;
   if (!PL) throw new Error('PDF library failed to load.');
@@ -67,10 +117,11 @@ export async function buildPdf({
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const form = doc.context.flateStream(artworkStream(subpaths, bbox, scale, L.gridH, strokeMm), {
+  const guide = order && !order.skipped && (order.cut.length || order.keep.length) ? { order, font: bold } : null;
+  const form = doc.context.flateStream(artworkStream(subpaths, bbox, scale, L.gridH, strokeMm, guide), {
     Type: 'XObject', Subtype: 'Form', FormType: 1,
     BBox: [0, 0, L.gridW * PT_PER_MM, L.gridH * PT_PER_MM],
-    Resources: {},
+    Resources: guide ? { Font: { F1: bold.ref } } : {},
   });
   const formRef = doc.context.register(form);
 
@@ -92,11 +143,13 @@ export async function buildPdf({
     const ox = (PW - L.totalW * k) / 2;
     const oyTop = PH - m - head; // top edge of the map in page space
     page.drawText('Assembly map', { x: m, y: PH - m - 6, size: 16, font: bold, color: rgb(0, 0, 0) });
+    // one wrapped note, so it stays on the page even on narrow paper such as 4x6
     page.drawText(
       `${cols} columns x ${rows} rows = ${L.pages} pages. Final size ${Math.round(artW)} x ${Math.round(artH)} mm. ` +
       'Print every page at 100% / Actual size.' +
-      (bordered ? ' Cut off the margin along the cut marks where pages join.' : ''),
-      { x: m, y: PH - m - 22, size: 8, font, color: rgb(0.3, 0.3, 0.3) },
+      (bordered ? ' Cut off the margin along the cut marks where pages join.' : '') +
+      (guide ? ' Red numbers = cut order (1 first, smallest inner details first). Grey hatching = leave uncut.' : ''),
+      { x: m, y: PH - m - 22, size: 8, lineHeight: 10, maxWidth: PW - 2 * m, font, color: rgb(0.3, 0.3, 0.3) },
     );
     // The form is in real points (1 pt = 1/PT_PER_MM mm), so it scales by k / PT_PER_MM.
     // Its origin is the grid's bottom-left corner; the grid sits at the top-left of the map.

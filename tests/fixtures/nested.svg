@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <!-- Rings and diamonds nested eight deep: paint / paper alternate at every level. -->
+  <path fill="#111" fill-rule="evenodd" d="
+    M150 5 A145 145 0 1 0 150.01 5 Z
+    M150 25 A125 125 0 1 1 149.99 25 Z"/>
+  <path fill="#111" fill-rule="evenodd" d="
+    M150 35 L265 150 L150 265 L35 150 Z
+    M150 60 L240 150 L150 240 L60 150 Z"/>
+  <circle cx="150" cy="150" r="52" fill="#111"/>
+  <circle cx="150" cy="150" r="38" fill="#fff"/>
+  <polygon points="150,120 180,150 150,180 120,150" fill="#111"/>
+  <circle cx="150" cy="150" r="9" fill="#fff"/>
+</svg>
