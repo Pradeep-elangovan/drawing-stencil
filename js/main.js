@@ -3,7 +3,7 @@ import { analyzeOrder, numberSize, HATCH_MM } from './order.js';
 import { MACHINES, MACHINE_IDS, fitReport } from './machines.js';
 import { buildKit } from './kit.js';
 import {
-  MM_PER, PAPERS, MAX_PAGES, WARN_PAGES, MARGIN_MM, OVERLAP_MM,
+  MM_PER, PAPERS, MAX_PAGES, WARN_PAGES, MARGIN_OPTIONS_MM, MARGIN_DEFAULT_MM, OVERLAP_MM,
   STROKE_DEFAULT_MM, STROKE_MIN_MM, STROKE_MAX_MM, STROKE_UNITS, paperLabel, computeLayout,
 } from './tiling.js';
 import { buildPdf } from './pdf.js';
@@ -18,7 +18,7 @@ const el = {
   order: $('order'), orderInfo: $('orderinfo'),
   machineOn: $('machineOn'), machineOpts: $('machineOpts'), machine: $('machine'), cutStyle: $('cutstyle'),
   bridge: $('bridge'), bridgeField: $('bridgeField'), machineHint: $('machinehint'), machineInfo: $('machineinfo'),
-  kit: $('kit'), kitHint: $('kithint'),
+  kit: $('kit'), kitHint: $('kithint'), margin: $('margin'), marginField: $('marginField'),
 };
 const STROKE_HINT = el.strokeHint.textContent;
 
@@ -52,6 +52,15 @@ for (const id of MACHINE_IDS) {
 }
 
 const orientation = () => document.querySelector('input[name="orient"]:checked').value;
+for (const mm of MARGIN_OPTIONS_MM) {
+  const o = document.createElement('option');
+  o.value = String(mm);
+  o.textContent = `${mm / 10} cm`;
+  if (mm === MARGIN_DEFAULT_MM) o.selected = true;
+  el.margin.append(o);
+}
+const marginMm = () => parseFloat(el.margin.value);
+
 const printMode = () => document.querySelector('input[name="mode"]:checked').value;
 const unitMm = () => MM_PER[el.unit.value];
 const strokeUnitMm = () => STROKE_UNITS[el.strokeUnit.value];
@@ -146,6 +155,7 @@ el.overview.addEventListener('change', update);
 el.order.addEventListener('change', update);
 for (const c of [el.machineOn, el.machine, el.cutStyle, el.bridge]) c.addEventListener('change', update);
 for (const r of document.querySelectorAll('input[name="orient"], input[name="mode"]')) r.addEventListener('change', update);
+el.margin.addEventListener('change', update);
 
 // ------------------------------------------------------------------ line thickness
 
@@ -175,9 +185,10 @@ function update() {
   const sOk = strokeOk();
   el.strokeHint.textContent = sOk ? STROKE_HINT : `Line thickness must be between ${STROKE_MIN_MM} mm and ${STROKE_MAX_MM} mm.`;
   el.strokeHint.style.color = sOk ? '' : 'var(--err)';
+  el.marginField.hidden = printMode() !== 'bordered';
   el.modeHint.textContent = printMode() === 'edge'
     ? `Pages print to the edge and overlap by ${OVERLAP_MM / 10} cm. Line up the grey crosses on neighbouring pages and tape.`
-    : `Every page keeps a ${MARGIN_MM / 10} cm blank margin. Where a page joins a neighbour, cut the margin off along the cut marks and butt the pages together; outer sides keep their margin.`;
+    : `Every page keeps a ${marginMm() / 10} cm blank margin, which holds the cut marks and page number. Where a page joins a neighbour, cut the margin off along the cut marks and butt the pages together; outer sides keep their margin.`;
 
   renderOrderInfo();
   renderMachineInfo();
@@ -198,7 +209,7 @@ function update() {
   }
 
   const artW = state.widthMm, artH = state.widthMm * aspect();
-  const opts = { mode: printMode(), strokeMm: state.strokeMm };
+  const opts = { mode: printMode(), strokeMm: state.strokeMm, marginMm: marginMm() };
   const L = computeLayout(artW, artH, el.paper.value, orientation(), opts);
   state.layout = L;
   renderMachineInfo(); // needs the layout for the paper-fit message
@@ -351,6 +362,7 @@ el.download.addEventListener('click', async () => {
       widthMm: state.widthMm,
       strokeMm: state.strokeMm,
       mode: printMode(),
+      marginMm: marginMm(),
       paper: el.paper.value,
       orientation: orientation(),
       overview: el.overview.checked,
@@ -401,6 +413,7 @@ el.kit.addEventListener('click', async () => {
       widthMm: state.widthMm,
       strokeMm: state.strokeMm,
       mode: printMode(),
+      marginMm: marginMm(),
       paper: el.paper.value,
       orientation: orientation(),
       overview: el.overview.checked,

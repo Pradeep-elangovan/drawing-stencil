@@ -31,7 +31,9 @@ It also deploys as-is to GitHub Pages, Netlify, etc.
   - *Edge to edge* (default): margin-less pages with a 10 mm overlap between neighbours, so a
     slightly shifted sheet never leaves a gap. Grey registration crosses sit mid-overlap; line
     them up on neighbouring pages, then tape.
-  - *Bordered*: for printers that cannot print to the edge. Every page keeps a blank 1 cm margin.
+  - *Bordered*: for printers that cannot print to the edge. Every page keeps a blank margin (choose 1, 1.27, 1.5 or 2 cm; default 1.5 cm). The
+    margin holds the cut marks and the `R1-C1  n/N` page number, which sit as far from the paper
+    edge as possible, because many printers cannot print in the last 3-12 mm of a sheet.
     Cut marks appear only on sides that join a neighbouring page (cut the margin off along the
     marks and butt the pages together); the outer sides of the whole grid keep their margin and
     have no marks. In a 3x3 grid the top row keeps its top margin, the left column its left

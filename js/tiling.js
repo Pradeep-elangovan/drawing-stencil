@@ -6,8 +6,12 @@ export const WARN_PAGES = 100;
 
 // Edge-to-edge: neighbouring pages share this strip so slight paper drift never leaves a gap.
 export const OVERLAP_MM = 10;
-// Bordered: blank safe margin kept on every page for printers that cannot print to the edge.
-export const MARGIN_MM = 10;
+// Bordered: blank margin kept on every page for printers that cannot print to the edge.
+// Home printers typically lose 3-6 mm on three sides and more at the bottom (some inkjets
+// 12 mm or more), and cut marks plus the page number live inside this margin, so the
+// default is 15 mm. 10 mm is the minimum.
+export const MARGIN_OPTIONS_MM = [10, 12.7, 15, 20];
+export const MARGIN_DEFAULT_MM = 15;
 
 // Line thickness is chosen by the user and is a real-world size, independent of artwork size.
 export const STROKE_DEFAULT_MM = 2;
@@ -47,17 +51,17 @@ export function pageDims(paper, orientation) {
  *
  * Each page shows a "window" of the artwork:
  *  - mode 'edge':     the window is the whole page; neighbours overlap by OVERLAP_MM.
- *  - mode 'bordered': the window is the page minus MARGIN_MM on every side; windows
+ *  - mode 'bordered': the window is the page minus the margin on every side; windows
  *                     tile exactly (no overlap). On sides that touch a neighbour the
  *                     margin is cut off along the cut marks; on the outside it stays.
  *
  * artW/artH: artwork geometry in mm. The grid adds half a stroke on every side
  * so the outer edge of the line is never clipped.
  */
-export function computeLayout(artW, artH, paper, orientation, { mode = 'edge', strokeMm = STROKE_DEFAULT_MM } = {}) {
+export function computeLayout(artW, artH, paper, orientation, { mode = 'edge', strokeMm = STROKE_DEFAULT_MM, marginMm = MARGIN_DEFAULT_MM } = {}) {
   const { pw, ph } = pageDims(paper, orientation);
   const bordered = mode === 'bordered';
-  const inset = bordered ? MARGIN_MM : 0;
+  const inset = bordered ? marginMm : 0;
   const overlap = bordered ? 0 : OVERLAP_MM;
   const winW = pw - 2 * inset, winH = ph - 2 * inset;
   const gridW = artW + strokeMm, gridH = artH + strokeMm;

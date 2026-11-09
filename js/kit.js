@@ -21,7 +21,7 @@ export async function buildKit(o) {
   const machine = MACHINES[o.machineId];
   const bridgeMm = BRIDGE_MM[o.bridge] ?? BRIDGE_MM.medium;
   const scale = o.widthMm / o.bbox.w;
-  const L = computeLayout(o.widthMm, o.bbox.h * scale, o.paper, o.orientation, { mode: o.mode, strokeMm: o.strokeMm });
+  const L = computeLayout(o.widthMm, o.bbox.h * scale, o.paper, o.orientation, { mode: o.mode, strokeMm: o.strokeMm, marginMm: o.marginMm });
 
   const enc = new TextEncoder();
   const files = [];

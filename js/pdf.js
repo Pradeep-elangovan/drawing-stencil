@@ -7,7 +7,7 @@
 // Two print styles:
 //  - edge:     the page is the window (no margin), neighbours overlap, registration
 //              crosses sit mid-overlap.
-//  - bordered: a blank MARGIN_MM border on every page, art clipped to the inner
+//  - bordered: a blank border (marginMm) on every page, art clipped to the inner
 //              window, cut marks on the sides that join a neighbour (outer sides
 //              of the whole grid keep their margin and get no marks).
 
@@ -89,6 +89,7 @@ function artworkStream(subpaths, bbox, scale, gridH, strokeMm, guide) {
  * @param {number} o.widthMm    requested real-world width of the artwork
  * @param {number} o.strokeMm   real-world line thickness
  * @param {'edge'|'bordered'} o.mode
+ * @param {number} [o.marginMm] blank border in bordered mode
  * @param {string} o.paper      key of PAPERS
  * @param {'portrait'|'landscape'} o.orientation
  * @param {boolean} o.overview  add an assembly-map page first
@@ -97,7 +98,7 @@ function artworkStream(subpaths, bbox, scale, gridH, strokeMm, guide) {
  * @returns {Promise<Uint8Array>}
  */
 export async function buildPdf({
-  subpaths, bbox, widthMm, strokeMm, mode, paper, orientation, overview, order = null, title = 'Stencil',
+  subpaths, bbox, widthMm, strokeMm, mode, marginMm, paper, orientation, overview, order = null, title = 'Stencil',
 }) {
   const PL = globalThis.PDFLib;
   if (!PL) throw new Error('PDF library failed to load.');
@@ -108,7 +109,7 @@ export async function buildPdf({
 
   const scale = widthMm / bbox.w;
   const artW = widthMm, artH = bbox.h * scale;
-  const L = computeLayout(artW, artH, paper, orientation, { mode, strokeMm });
+  const L = computeLayout(artW, artH, paper, orientation, { mode, strokeMm, marginMm });
   const { pw, ph, cols, rows, stepX, stepY, overlap, inset, winW, winH, bordered } = L;
 
   const doc = await PDFDocument.create();
@@ -208,9 +209,10 @@ export async function buildPdf({
       }
 
       if (bordered) {
-        // Cut marks only where this page joins a neighbour. Each mark sits in the margin,
-        // just outside the window corner, in line with the trim line (gap 1 mm, length 4 mm).
-        const M = inset, gap = 1, len = 4, th = 0.45;
+        // Cut marks only where this page joins a neighbour. They sit in the margin right
+        // beside the trim line (0.5 mm off it, 3.5 mm long), as far from the paper edge as
+        // possible, because printers cannot print close to the edge.
+        const M = inset, gap = 0.5, len = 3.5, th = 0.45;
         const xl = M, xr = pw - M, yb = M, yt = ph - M;
         if (hasL || hasR) {
           for (const x of [hasL ? xl : null, hasR ? xr : null]) {
@@ -226,8 +228,9 @@ export async function buildPdf({
             seg(page, xr + gap, y, xr + gap + len, y, th, black);
           }
         }
+        // Page label: bottom margin, just under the trim line (well clear of the paper edge).
         page.drawText(`R${r + 1}-C${c + 1}   ${n}/${L.pages}`, {
-          x: (M + 3) * PT_PER_MM, y: 4 * PT_PER_MM, size: 7, font, color: grey,
+          x: (M + 3) * PT_PER_MM, y: (M - 3.5) * PT_PER_MM, size: 7, font, color: grey,
         });
       } else {
         // Registration crosses sit mid-overlap, so the same cross appears at the same

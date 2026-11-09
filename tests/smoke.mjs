@@ -35,7 +35,7 @@ const STROKE_UNIT = { mm: 1, cm: 10, in: 25.4 };
 // Independent re-statement of the layout rules (kept separate from js/tiling.js on purpose).
 const expectLayout = (wMm, hMm, [a, b], landscape, mode, strokeMm) => {
   const [pw, ph] = landscape ? [b, a] : [a, b];
-  const inset = mode === 'bordered' ? 10 : 0, ov = mode === 'bordered' ? 0 : 10;
+  const inset = mode === 'bordered' ? 15 : 0, ov = mode === 'bordered' ? 0 : 10;
   const ww = pw - 2 * inset, wh = ph - 2 * inset;
   const gw = wMm + strokeMm, gh = hMm + strokeMm;
   const cols = gw <= ww ? 1 : Math.ceil((gw - ov) / (ww - ov) - 1e-9);
